@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
@@ -22,6 +23,7 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.SystemClock;
@@ -50,11 +52,25 @@ import android.os.Bundle;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
+
+import androidx.core.app.ActivityCompat;
+
 import java.util.Locale;
 import java.util.Timer;
 import java.util.TimerTask;
 
 public class MainActivity extends Activity implements SensorEventListener {
+
+    private static final String[] INITIAL_PERMS = {
+            Manifest.permission.CAMERA,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.RECORD_AUDIO
+    };
+
+    private static final int INITIAL_PERMISSION_REQUEST = 1339;
+
+
     private Camera mCamera;
     private CameraPreview mPreview;
     private MediaRecorder mediaRecorder;
@@ -74,12 +90,33 @@ public class MainActivity extends Activity implements SensorEventListener {
 
     LocationListener locationListener;
     LocationManager LM;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         myContext = this;
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+
+            ActivityCompat.requestPermissions((Activity) myContext, INITIAL_PERMS, INITIAL_PERMISSION_REQUEST);
+
+            return;
+        } else {
+            configure();
+        }
+    }
+
+    void configure() {
+
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         //accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
         //head = sensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION);
@@ -106,8 +143,6 @@ public class MainActivity extends Activity implements SensorEventListener {
         String setTextText = "Heading: " + heading + " Speed: " + speed;
         tv.setText(setTextText);
         */
-
-
     }
 
 
@@ -145,32 +180,52 @@ public class MainActivity extends Activity implements SensorEventListener {
         sensorManager.registerListener(this, rotv, SensorManager.SENSOR_DELAY_NORMAL);
 
 
-
         locationListener = new LocationListener() {
             public void onLocationChanged(Location location) {
                 // Called when a new location is found by the network location provider.
 
-                latitude  = location.getLatitude();
+                latitude = location.getLatitude();
                 longitude = location.getLongitude();
 
-                if(location.hasSpeed()) {
+                if (location.hasSpeed()) {
                     speed = location.getSpeed();
                 }
                 location.distanceBetween(latitude_original, longitude_original, latitude, longitude, dist);
             }
 
-            public void onStatusChanged(String provider, int status, Bundle extras) {}
+            public void onStatusChanged(String provider, int status, Bundle extras) {
+            }
 
-            public void onProviderEnabled(String provider) {}
+            public void onProviderEnabled(String provider) {
+            }
 
-            public void onProviderDisabled(String provider) {}
+            public void onProviderDisabled(String provider) {
+            }
         };
 
         // Acquire a reference to the system Location Manager
-        LM = (LocationManager)getSystemService(Context.LOCATION_SERVICE);
+        LM = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
 
         // Register the listener with the Location Manager to receive location updates
         LM.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
+
+        switch (requestCode) {
+            case INITIAL_PERMISSION_REQUEST: {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.length > 0) {
+                    if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                        configure();
+                    }
+                }
+            }
+
+            // other 'case' lines to check for other
+            // permissions this app might request
+        }
     }
 
     @Override
@@ -222,26 +277,13 @@ public class MainActivity extends Activity implements SensorEventListener {
 */
             } else {
                 timeStampFile = String.valueOf((new Date()).getTime());
-                File wallpaperDirectory = new File(Environment.getExternalStorageDirectory().getPath()+"/elab/");
-                wallpaperDirectory.mkdirs();
 
-                File wallpaperDirectory1 = new File(Environment.getExternalStorageDirectory().getPath()+"/elab/"+timeStampFile);
-                wallpaperDirectory1.mkdirs();
-                if (!prepareMediaRecorder()) {
-                    Toast.makeText(MainActivity.this, "Fail in prepareMediaRecorder()!\n - Ended -", Toast.LENGTH_LONG).show();
-                    finish();
-                }
+//                File wallpaperDirectory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                //new File(Environment.getExternalStorageDirectory().getPath()+"/elab/");
+//                wallpaperDirectory.mkdirs();
 
-                // work on UiThread for better performance
-                runOnUiThread(new Runnable() {
-                    public void run() {
-                        try {
-                            mediaRecorder.start();
-                        } catch (final Exception ex) {
-                        }
-                    }
-                });
-                Toast.makeText(MainActivity.this, "Recording...", Toast.LENGTH_LONG).show();
+//                File wallpaperDirectory1 = new File(Environment.getExternalStorageDirectory().getPath()+"/elab/"+timeStampFile);
+//                wallpaperDirectory1.mkdirs();
 
                 Camera.Parameters params = mCamera.getParameters();
                 params.setPreviewFpsRange( 30000, 30000 ); // 30 fps
@@ -250,6 +292,25 @@ public class MainActivity extends Activity implements SensorEventListener {
 
                 params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
                 mCamera.setParameters(params);
+
+                if (!prepareMediaRecorder()) {
+                    Toast.makeText(MainActivity.this, "Fail in prepareMediaRecorder()!\n - Ended -", Toast.LENGTH_LONG).show();
+                    finish();
+                }
+
+                // work on UiThread for better performance
+//                runOnUiThread(new Runnable() {
+//                    public void run() {
+//                        try {
+//                            mediaRecorder.start();
+//                        } catch (final Exception ex) {
+//                        }
+//                    }
+//                });
+                mediaRecorder.start();
+                Toast.makeText(MainActivity.this, "Recording...", Toast.LENGTH_LONG).show();
+
+
                 //d.beginData();
                 storeData();
                 chrono.setBase(SystemClock.elapsedRealtime());
@@ -281,17 +342,19 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         mediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
         mediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
-        if(quality == 0)
-            mediaRecorder.setProfile(CamcorderProfile.get(CamcorderProfile.QUALITY_1080P));
-        else if(quality == 1)
-            mediaRecorder.setProfile(CamcorderProfile.get(CamcorderProfile.QUALITY_720P));
-        else if(quality == 2)
-            mediaRecorder.setProfile(CamcorderProfile.get(CamcorderProfile.QUALITY_480P));
+//        if(quality == 0)
+        mediaRecorder.setProfile(CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH));
+//        else if(quality == 1)
+//            mediaRecorder.setProfile(CamcorderProfile.get(CamcorderProfile.QUALITY_720P));
+//        else if(quality == 2)
+//            mediaRecorder.setProfile(CamcorderProfile.get(CamcorderProfile.QUALITY_480P));
 
         //String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        File dir = Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_DOWNLOADS);
 
-        mediaRecorder.setOutputFile(Environment.getExternalStorageDirectory().getPath()+"/elab/" + timeStampFile + "/" + timeStampFile  + ".mp4");
-        mediaRecorder.setVideoFrameRate(VideoFrameRate);
+        mediaRecorder.setOutputFile(dir.getPath() + "/" + timeStampFile  + ".mp4");
+//        mediaRecorder.setVideoFrameRate(VideoFrameRate);
         //mediaRecorder.setMaxDuration(5000);
 
         try {
@@ -363,7 +426,12 @@ public class MainActivity extends Activity implements SensorEventListener {
 
     public void storeData() {
 
-        String filePath = Environment.getExternalStorageDirectory().getPath()+"/elab/" + timeStampFile + "/" + timeStampFile  +  ".csv";
+        File storageDir = Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_DOWNLOADS);
+                //new File(Environment.getExternalStorageDirectory().toString(), "/elab/" + timeStampFile);
+        storageDir.mkdirs();
+
+        String filePath = storageDir.getPath() + "/" + timeStampFile  +  ".csv";
         try {
             writer = new PrintWriter(filePath);
         } catch (FileNotFoundException e) {
